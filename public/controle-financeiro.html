@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro Pessoal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <div class="max-w-4xl mx-auto py-8 px-4">
+        <h1 class="text-3xl font-bold text-center text-gray-900 mb-8">
+            Controle Financeiro Pessoal
+        </h1>
+
+        <!-- Formulário -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <form id="transactionForm" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-2">
+                        <label for="date" class="block text-sm font-medium text-gray-700">Data</label>
+                        <input 
+                            type="date" 
+                            id="date" 
+                            required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="description" class="block text-sm font-medium text-gray-700">Descrição</label>
+                        <input 
+                            type="text" 
+                            id="description" 
+                            required 
+                            placeholder="Ex: Salário, Conta de luz..."
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="value" class="block text-sm font-medium text-gray-700">Valor (R$)</label>
+                        <input 
+                            type="text" 
+                            id="value" 
+                            required 
+                            placeholder="0,00"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">Tipo</label>
+                        <div class="flex space-x-4">
+                            <label class="flex items-center">
+                                <input type="radio" name="type" value="receita" checked class="mr-2">
+                                <span>Receita</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="type" value="despesa" class="mr-2">
+                                <span>Despesa</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 transition-colors duration-200"
+                >
+                    Adicionar Lançamento
+                </button>
+            </form>
+        </div>
+
+        <!-- Filtro e Saldo -->
+        <div class="flex justify-between items-center mb-6">
+            <select 
+                id="filter" 
+                class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+                <option value="todos">Todos</option>
+                <option value="receita">Receitas</option>
+                <option value="despesa">Despesas</option>
+            </select>
+
+            <div class="bg-white rounded-lg shadow-lg p-4">
+                <p class="text-sm text-gray-500">Saldo Atual</p>
+                <p id="balance" class="text-2xl font-bold text-green-600">R$ 0,00</p>
+            </div>
+        </div>
+
+        <!-- Tabela de Transações -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="py-3 px-4 text-left text-sm font-medium text-gray-500">Data</th>
+                            <th class="py-3 px-4 text-left text-sm font-medium text-gray-500">Descrição</th>
+                            <th class="py-3 px-4 text-left text-sm font-medium text-gray-500">Valor</th>
+                            <th class="py-3 px-4 text-left text-sm font-medium text-gray-500">Tipo</th>
+                            <th class="py-3 px-4 text-left text-sm font-medium text-gray-500">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsList">
+                        <tr id="emptyState">
+                            <td colspan="5" class="py-4 text-center text-gray-500">
+                                Nenhuma transação encontrada
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Estado da aplicação
+        let transactions = [];
+        let currentFilter = 'todos';
+
+        // Elementos do DOM
+        const form = document.getElementById('transactionForm');
+        const dateInput = document.getElementById('date');
+        const descriptionInput = document.getElementById('description');
+        const valueInput = document.getElementById('value');
+        const filterSelect = document.getElementById('filter');
+        const balanceElement = document.getElementById('balance');
+        const transactionsList = document.getElementById('transactionsList');
+        const emptyState = document.getElementById('emptyState');
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            // Definir data atual
+            dateInput.value = new Date().toISOString().split('T')[0];
+            
+            // Carregar transações do localStorage
+            loadTransactions();
+            
+            // Atualizar interface
+            updateUI();
+        });
+
+        // Formatação de valor
+        valueInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/[^\d,]/g, '');
+            
+            // Permitir apenas números e vírgula
+            if (value.includes(',')) {
+                const parts = value.split(',');
+                if (parts.length > 2) {
+                    value = parts[0] + ',' + parts[1];
+                }
+                if (parts[1] && parts[1].length > 2) {
+                    value = parts[0] + ',' + parts[1].substring(0, 2);
+                }
+            }
+            
+            e.target.value = value;
+        });
+
+        // Submissão do formulário
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const date = dateInput.value;
+            const description = descriptionInput.value.trim();
+            const valueStr = valueInput.value.replace(',', '.');
+            const value = parseFloat(valueStr);
+            const type = document.querySelector('input[name="type"]:checked').value;
+
+            // Validação
+            if (!date || !description || !valueStr || isNaN(value) || value <= 0) {
+                alert('Por favor, preencha todos os campos corretamente.');
+                return;
+            }
+
+            // Criar transação
+            const transaction = {
+                id: Date.now(),
+                date: date,
+                description: description,
+                value: value,
+                type: type
+            };
+
+            // Adicionar à lista
+            transactions.push(transaction);
+            
+            // Salvar no localStorage
+            saveTransactions();
+            
+            // Limpar formulário
+            form.reset();
+            dateInput.value = new Date().toISOString().split('T')[0];
+            
+            // Atualizar interface
+            updateUI();
+        });
+
+        // Filtro
+        filterSelect.addEventListener('change', function() {
+            currentFilter = this.value;
+            updateUI();
+        });
+
+        // Carregar transações do localStorage
+        function loadTransactions() {
+            try {
+                const stored = localStorage.getItem('financialTransactions');
+                if (stored) {
+                    transactions = JSON.parse(stored);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar transações:', error);
+                transactions = [];
+            }
+        }
+
+        // Salvar transações no localStorage
+        function saveTransactions() {
+            try {
+                localStorage.setItem('financialTransactions', JSON.stringify(transactions));
+            } catch (error) {
+                console.error('Erro ao salvar transações:', error);
+            }
+        }
+
+        // Excluir transação
+        function deleteTransaction(id) {
+            if (confirm('Tem certeza que deseja excluir esta transação?')) {
+                transactions = transactions.filter(t => t.id !== id);
+                saveTransactions();
+                updateUI();
+            }
+        }
+
+        // Calcular saldo
+        function calculateBalance() {
+            return transactions.reduce((acc, transaction) => {
+                return transaction.type === 'receita' 
+                    ? acc + transaction.value 
+                    : acc - transaction.value;
+            }, 0);
+        }
+
+        // Filtrar transações
+        function getFilteredTransactions() {
+            if (currentFilter === 'todos') {
+                return transactions;
+            }
+            return transactions.filter(t => t.type === currentFilter);
+        }
+
+        // Formatar valor em reais
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(value);
+        }
+
+        // Formatar data
+        function formatDate(dateStr) {
+            return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
+        }
+
+        // Atualizar interface
+        function updateUI() {
+            // Atualizar saldo
+            const balance = calculateBalance();
+            balanceElement.textContent = formatCurrency(balance);
+            balanceElement.className = `text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`;
+
+            // Atualizar lista de transações
+            const filteredTransactions = getFilteredTransactions();
+            
+            if (filteredTransactions.length === 0) {
+                emptyState.style.display = 'table-row';
+                // Remover outras linhas
+                const rows = transactionsList.querySelectorAll('tr:not(#emptyState)');
+                rows.forEach(row => row.remove());
+            } else {
+                emptyState.style.display = 'none';
+                
+                // Limpar lista atual
+                const rows = transactionsList.querySelectorAll('tr:not(#emptyState)');
+                rows.forEach(row => row.remove());
+                
+                // Adicionar transações filtradas (mais recentes primeiro)
+                filteredTransactions
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .forEach(transaction => {
+                        const row = document.createElement('tr');
+                        row.className = 'border-b hover:bg-gray-50';
+                        
+                        const valueClass = transaction.type === 'receita' ? 'text-green-600' : 'text-red-600';
+                        
+                        row.innerHTML = `
+                            <td class="py-3 px-4">${formatDate(transaction.date)}</td>
+                            <td class="py-3 px-4">${transaction.description}</td>
+                            <td class="py-3 px-4 font-medium ${valueClass}">${formatCurrency(transaction.value)}</td>
+                            <td class="py-3 px-4 capitalize">${transaction.type}</td>
+                            <td class="py-3 px-4">
+                                <button 
+                                    onclick="deleteTransaction(${transaction.id})"
+                                    class="text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded text-sm"
+                                >
+                                    Excluir
+                                </button>
+                            </td>
+                        `;
+                        
+                        transactionsList.appendChild(row);
+                    });
+            }
+        }
+    </script>
+</body>
+</html>
